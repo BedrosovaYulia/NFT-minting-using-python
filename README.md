@@ -10,3 +10,6 @@ arweave deploy --key-file /Users/BedrosovaYulia/Documents/Projects/metaplex-api/
 python3 mint.py -j 'https://arweave.net/S0Eo5QsC2yS9svD7denUaYa36JvSxYFAG9D4DwxUWGE'
 
 You can put these commands in the pipeline and use them for your NFT batch generation.
+
+# AWS Lambda version:
+To prepare the layer for the Lambda, I first deployed amazonlinux on my machine in docker and installed the necessary libraries (solana, cryptography) in the folder python/lib/python3.7/site-packages/
