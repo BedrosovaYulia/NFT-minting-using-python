@@ -9,54 +9,23 @@ import api.metaplex_api as metaplex_api
 import boto3
 import base64
 from botocore.exceptions import ClientError
+import datetime
 
 
-def get_secret(secret_name):
-
-    #secret_name = "solana"
-    region_name = "us-east-1"
-
-    # Create a Secrets Manager client
+def get_secret(secret_name,region_name):
     session = boto3.session.Session()
     client = session.client(
         service_name='secretsmanager',
         region_name=region_name
     )
-
-    # In this sample we only handle the specific exceptions for the 'GetSecretValue' API.
-    # See https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
-    # We rethrow the exception by default.
-
     try:
         get_secret_value_response = client.get_secret_value(
             SecretId=secret_name
         )
-        
     except ClientError as e:
-        if e.response['Error']['Code'] == 'DecryptionFailureException':
-            # Secrets Manager can't decrypt the protected secret text using the provided KMS key.
-            # Deal with the exception here, and/or rethrow at your discretion.
-            raise e
-        elif e.response['Error']['Code'] == 'InternalServiceErrorException':
-            # An error occurred on the server side.
-            # Deal with the exception here, and/or rethrow at your discretion.
-            raise e
-        elif e.response['Error']['Code'] == 'InvalidParameterException':
-            # You provided an invalid value for a parameter.
-            # Deal with the exception here, and/or rethrow at your discretion.
-            raise e
-        elif e.response['Error']['Code'] == 'InvalidRequestException':
-            # You provided a parameter value that is not valid for the current state of the resource.
-            # Deal with the exception here, and/or rethrow at your discretion.
-            raise e
-        elif e.response['Error']['Code'] == 'ResourceNotFoundException':
-            # We can't find the resource that you asked for.
-            # Deal with the exception here, and/or rethrow at your discretion.
-            raise e
+        print("Can't find solana secret key")
+        raise e
     else:
-        # Decrypts secret using the associated KMS key.
-        # Depending on whether the secret is a string or binary, one of these fields will be populated.
-        print(get_secret_value_response)
         if 'SecretString' in get_secret_value_response:
             secret = get_secret_value_response['SecretString']
             return secret
@@ -69,11 +38,11 @@ def get_secret(secret_name):
 
 def lambda_handler(event, context):
     
-    divinity_json_file = "https://arweave.net/KMqr5IowiHhfxhd_Yo1y6tnF2cc6sryeD3cU9IIxpFk"
+    divinity_json_file = "https://arweave.net/S0Eo5QsC2yS9svD7denUaYa36JvSxYFAG9D4DwxUWGE"
 
     if (divinity_json_file):
 
-        secret = json.loads(get_secret("solana"))['solana_key'];
+        secret = json.loads(get_secret("solana","us-east-1"))['solana_key'];
         #print(secret)
         
         lines = secret.split(',')
@@ -90,22 +59,60 @@ def lambda_handler(event, context):
     
         api_endpoint = "https://api.devnet.solana.com/"
     
-        # requires a JSON file with metadata. best to publish on Arweave
-        print(divinity_json_file)
+        
         # deploy a contract. will return a contract key.
         
-        #print(api.wallet())
-        print("Deploy:")
-        result = api.deploy(api_endpoint, "Test NFT deploy 2", "TNF", fees=300)
-        print("Deploy completed. Result: %s",result)
-    
-        print("Load contract key:")
-        contract_key = json.loads(result).get('contract')
-        print("Contract key loaded. Conract key: %s", contract_key)
-        print("Mint:")
-        # conduct a mint, and send to a recipient, e.g. wallet_2
-        mint_res = api.mint(api_endpoint, contract_key, keypair.public_key, divinity_json_file)
-        print("Mint completed. Result: %s", mint_res)
+        now = datetime.datetime.now()
+        
+        json_file_template={
+            "name": "Bedrosova"+now.strftime("%H-%M-%S"),
+            "description": "Yuliya Bedrosova Test NFT from AWS Lambda",
+            "seller_fee_basis_points": 500,
+            "image": "https://solana-nft-minter.s3.amazonaws.com/2.png",
+            "collection": {
+                "name": "Bedrosova Test NFT from AWS Lambda",
+                "family": "Bedrosova Test NFT"
+            },
+            "properties": {
+                "files": [
+                    {
+                        "uri": "https://solana-nft-minter.s3.amazonaws.com/2.png",
+                        "type": "image/jpg"
+                    }
+                ],
+                "category": "image",
+                "creators": [
+                    {
+                        "address": str(keypair.public_key),
+                        "share": 100
+                    }
+                ]
+            }
+        }
+        s3_client = boto3.client('s3')
+        bucket_name = "solana-nft-minter"
+        response = s3_client.put_object(
+            ACL='public-read',
+            Body=json.dumps(json_file_template, indent=2),
+            ContentType='application/json',
+            Bucket=bucket_name,
+            Key="json/test-nft-"+now.strftime("%d-%m-%Y-%H-%M-%S")+".json",
+        )
+
+        if(response):
+            print("Deploy:")
+            result = api.deploy(api_endpoint, "Bedrosova Test NFT from AWS Lambda", "BTL", fees=300)
+            print("Deploy completed. Result: %s",result)
+            print("Load contract key:")
+            contract_key = json.loads(result).get('contract')
+            print("Contract key loaded. Conract key: %s", contract_key)
+            print("Mint:")
+            # conduct a mint, and send to a recipient, e.g. wallet_2
+            divinity_json_file="https://solana-nft-minter.s3.amazonaws.com/json/test-nft-"+now.strftime("%d-%m-%Y-%H-%M-%S")+".json"
+            print(api_endpoint, contract_key, keypair.public_key,divinity_json_file)
+            
+            mint_res = api.mint(api_endpoint, contract_key, keypair.public_key,divinity_json_file)
+            print("Mint completed. Result: %s", mint_res)
 
     
     return {
