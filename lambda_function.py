@@ -121,7 +121,7 @@ def lambda_handler(event, context):
                 print("Mint completed. Result: %s", mint_res)
             except:
                 print("try to mint another time:")
-                time.sleep(60)
+                #time.sleep(60)
                 mint_res = api.mint(api_endpoint, contract_key, keypair.public_key,divinity_json_file)
                 print("Mint completed. Result: %s", mint_res)
 
