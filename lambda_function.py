@@ -10,6 +10,8 @@ import boto3
 import base64
 from botocore.exceptions import ClientError
 import datetime
+import time
+
 
 
 def get_secret(secret_name,region_name):
@@ -38,9 +40,9 @@ def get_secret(secret_name,region_name):
 
 def lambda_handler(event, context):
     
-    divinity_json_file = "https://arweave.net/S0Eo5QsC2yS9svD7denUaYa36JvSxYFAG9D4DwxUWGE"
-
-    if (divinity_json_file):
+    key=event['Records'][0]['s3']['object']['key']
+    
+    if (key):
 
         secret = json.loads(get_secret("solana","us-east-1"))['solana_key'];
         #print(secret)
@@ -68,7 +70,7 @@ def lambda_handler(event, context):
             "name": "Bedrosova"+now.strftime("%H-%M-%S"),
             "description": "Yuliya Bedrosova Test NFT from AWS Lambda",
             "seller_fee_basis_points": 500,
-            "image": "https://solana-nft-minter.s3.amazonaws.com/2.png",
+            "image": "https://solana-nft-minter.s3.amazonaws.com/"+str(key),
             "collection": {
                 "name": "Bedrosova Test NFT from AWS Lambda",
                 "family": "Bedrosova Test NFT"
@@ -76,7 +78,7 @@ def lambda_handler(event, context):
             "properties": {
                 "files": [
                     {
-                        "uri": "https://solana-nft-minter.s3.amazonaws.com/2.png",
+                        "uri": "https://solana-nft-minter.s3.amazonaws.com/"+str(key),
                         "type": "image/jpg"
                     }
                 ],
@@ -89,8 +91,11 @@ def lambda_handler(event, context):
                 ]
             }
         }
+        
         s3_client = boto3.client('s3')
         bucket_name = "solana-nft-minter"
+    
+        
         response = s3_client.put_object(
             ACL='public-read',
             Body=json.dumps(json_file_template, indent=2),
@@ -101,7 +106,7 @@ def lambda_handler(event, context):
 
         if(response):
             print("Deploy:")
-            result = api.deploy(api_endpoint, "Bedrosova Test NFT from AWS Lambda", "BTL", fees=300)
+            result = api.deploy(api_endpoint, "TestNFT", "TNF", fees=300)
             print("Deploy completed. Result: %s",result)
             print("Load contract key:")
             contract_key = json.loads(result).get('contract')
@@ -111,8 +116,14 @@ def lambda_handler(event, context):
             divinity_json_file="https://solana-nft-minter.s3.amazonaws.com/json/test-nft-"+now.strftime("%d-%m-%Y-%H-%M-%S")+".json"
             print(api_endpoint, contract_key, keypair.public_key,divinity_json_file)
             
-            mint_res = api.mint(api_endpoint, contract_key, keypair.public_key,divinity_json_file)
-            print("Mint completed. Result: %s", mint_res)
+            try:
+                mint_res = api.mint(api_endpoint, contract_key, keypair.public_key,divinity_json_file)
+                print("Mint completed. Result: %s", mint_res)
+            except:
+                print("try to mint another time:")
+                time.sleep(60)
+                mint_res = api.mint(api_endpoint, contract_key, keypair.public_key,divinity_json_file)
+                print("Mint completed. Result: %s", mint_res)
 
     
     return {
